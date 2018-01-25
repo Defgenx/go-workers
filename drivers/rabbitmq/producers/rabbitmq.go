@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	uri          = flag.String("uri", "amqp://guest:guest@bender.digitick.local:5672/", "AMQP URI")
+	uri          = flag.String("uri", "amqp://guest:guest@localhost:5672/", "AMQP URI")
 	exchangeName = flag.String("exchange", "default-exchange", "Durable AMQP exchange name")
 	exchangeType = flag.String("exchange-type", "direct", "Exchange type - direct|fanout|topic|x-custom")
 	routingKey   = flag.String("key", "default-key", "AMQP routing key")

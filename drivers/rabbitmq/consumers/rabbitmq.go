@@ -8,31 +8,32 @@ import (
 )
 
 var (
-	uri          = "amqp://guest:guest@bender.digitick.local:5672/"
+	uri          = "amqp://guest:guest@localhost:5672/"
 	exchange     = "default-exchange"
 	exchangeType = "direct"
 	queue        = "default-queue"
 	bindingKey   = "default-key"
 	consumerTag  = "simple-consumer"
-	lifetime     = 15*time.Second
+	lifetime     = 15 * time.Second
 )
 
-func Consume(timer *time.Duration) (*Consumer, <-chan string, error) {
+func Consume(timer *time.Duration) (*RabbitMQ, <-chan string, error) {
 	lifetime = *timer
-	c, output, err := NewConsumer(uri, exchange, exchangeType, queue, bindingKey, consumerTag)
+	c, deliveries, err := NewRabbitMQ(uri, exchange, exchangeType, queue, bindingKey, consumerTag)
 
+	output := c.Handle(deliveries, c.done)
 	return c, output, err
 }
 
-type Consumer struct {
+type RabbitMQ struct {
 	conn    *amqp.Connection
 	channel *amqp.Channel
 	tag     string
 	done    chan error
 }
 
-func NewConsumer(amqpURI, exchange, exchangeType, queueName, key, ctag string) (*Consumer, <-chan string, error) {
-	c := &Consumer{
+func NewRabbitMQ(amqpURI, exchange, exchangeType, queueName, key, ctag string) (*RabbitMQ, <-chan amqp.Delivery, error) {
+	c := &RabbitMQ{
 		conn:    nil,
 		channel: nil,
 		tag:     ctag,
@@ -106,12 +107,10 @@ func NewConsumer(amqpURI, exchange, exchangeType, queueName, key, ctag string) (
 		return nil, nil, fmt.Errorf("Queue Consume: %s", err)
 	}
 
-	out := c.handle(deliveries, c.done)
-
-	return c, out, nil
+	return c, deliveries, nil
 }
 
-func (c *Consumer) Shutdown() error {
+func (c *RabbitMQ) Shutdown() error {
 	// will close() the deliveries channel
 	if err := c.channel.Cancel(c.tag, true); err != nil {
 		return fmt.Errorf("Consumer cancel failed: %s", err)
@@ -127,7 +126,7 @@ func (c *Consumer) Shutdown() error {
 	return <-c.done
 }
 
-func (c *Consumer) handle(deliveries <-chan amqp.Delivery, done chan error) <-chan string {
+func (c *RabbitMQ) Handle(deliveries <-chan amqp.Delivery, done chan error) <-chan string {
 	out := make(chan string)
 	go func() {
 		for d := range deliveries {
