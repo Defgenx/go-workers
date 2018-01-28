@@ -1,7 +1,7 @@
 package elasticsearch
 
 import (
-	elastic "gopkg.in/olivere/elastic.v1"
+	"gopkg.in/olivere/elastic.v1"
 	"sync"
 	"net/http"
 	"log"
@@ -10,24 +10,22 @@ import (
 )
 
 type DocIndexUpdate struct {
-	Action string
-	Id string
+	Action   string
+	Id       string
 	Document interface{}
-
 }
 type DocDelete struct {
 	Id string
-
 }
+
 var synchro sync.Once
 var elasticLib *ElasticSearchClient
 
-
 type ElasticSearchClient struct {
-	Client      *elastic.Client
+	Client *elastic.Client
 }
 
-func NewElasticSearchClient(domains... string) *ElasticSearchClient{
+func NewElasticSearchClient(domains ... string) *ElasticSearchClient {
 	synchro.Do(func() {
 		client, err := elastic.NewClient(
 			http.DefaultClient,
@@ -41,26 +39,25 @@ func NewElasticSearchClient(domains... string) *ElasticSearchClient{
 	for i := 0; i < len(domains); i++ {
 		ping, _, err := elasticLib.Client.Ping().URL(domains[i]).Do()
 		if err != nil {
-			log.Fatalf("Elasticsearch Ping error: %s", err)
+			log.Fatalf("elasticsearch Ping error: %s", err)
 		}
 		if ping.Status != 200 {
-			log.Fatalf("Elasticsearch server unreachable, error: %s", err)
+			log.Fatalf("elasticsearch server unreachable, error: %s", err)
 		}
 	}
 	return elasticLib
 }
 
-func (e *ElasticSearchClient) HandleCommonQuery(query string, name string, boost float64, indexType string, index... string) <-chan map[string]interface{} {
+func (e *ElasticSearchClient) HandleCommonQuery(query string, name string, boost float64, indexType string, index ... string) <-chan map[string]interface{} {
 	var response chan map[string]interface{}
 	if len(name) == 0 {
 		name = "default-name-query"
 	}
 	if boost < 0 {
-		log.Fatal("Boost must not be negative")
+		log.Fatal("boost must not be negative")
 	}
 	go func() {
 		defer close(response)
-
 		commonQuery := elastic.NewCommonQuery(name, query)
 		commonQuery.Boost(boost)
 		results, err := e.Client.Search(index...).Type(indexType).Query(commonQuery).Do()
@@ -68,13 +65,13 @@ func (e *ElasticSearchClient) HandleCommonQuery(query string, name string, boost
 			log.Fatalf("query failed, %s", err)
 		}
 		if results.Hits == nil {
-			log.Fatalf("expected SearchResult.Hits != nil; got nil")
+			log.Fatal("expected SearchResult.Hits != nil")
 		}
-		if results.Hits.TotalHits != 1 {
-			log.Fatalf("expected results.Hits.TotalHits = %d; got %d", 1, results.Hits.TotalHits)
+		if results.Hits.TotalHits == 0 {
+			log.Fatal("expected results.Hits.TotalHits > 0")
 		}
-		if len(results.Hits.Hits) != 1 {
-			log.Fatalf("expected len(results.Hits.Hits) = %d; got %d", 1, len(results.Hits.Hits))
+		if len(results.Hits.Hits) == 0 {
+			log.Fatal("expected len(results.Hits.Hits) > 0")
 		}
 
 		for _, hit := range results.Hits.Hits {
@@ -95,14 +92,12 @@ func (e *ElasticSearchClient) HandleFindById(index string, indexType string, id 
 
 	go func() {
 		defer close(response)
-
-
 		result, err := e.Client.Get().Index(index).Type(indexType).Id(id).Do()
 		if err != nil {
 			log.Fatalf("finding id failed, %s", err)
 		}
 		if result.Found {
-			fmt.Printf("Got document %s in version %d from index %s, type %s\n", result.Id, result.Version, result.Index, result.Type)
+			fmt.Printf("got document %s in version %d from index %s, type %s\n", result.Id, result.Version, result.Index, result.Type)
 		}
 		response <- result
 	}()
@@ -117,24 +112,23 @@ func (e *ElasticSearchClient) HandleFindById(index string, indexType string, id 
 func (e *ElasticSearchClient) HandleCreateIndex(index string, mapping string) <-chan bool {
 	responseChan := make(chan bool)
 	go func() {
-		defer
-			close(responseChan)
-		if !e.indexExits(index) {
+		defer close(responseChan)
+		if !e.indexExist(index) {
 			indexCreate := elastic.NewCreateIndexService(e.Client)
 			result, err := indexCreate.Index(index).Do()
 			if result.Acknowledged {
-				log.Printf("Index %s created with sucess", index)
+				log.Printf("index %s created with sucess", index)
 			} else {
-				log.Fatalf("Index %s creation failed", index)
+				log.Fatalf("index %s creation failed", index)
 			}
 
 			if err != nil {
-				log.Fatalf("Index %s creation failed with error: %s", index, err)
+				log.Fatalf("index %s creation failed with error: %s", index, err)
 			}
 			responseChan <- result.Acknowledged
 		} else {
 			responseChan <- true
-			log.Printf("Index %s already exist skipping...", index)
+			log.Printf("index %s already exist skipping...", index)
 		}
 	}()
 	return responseChan
@@ -144,32 +138,32 @@ func (e *ElasticSearchClient) HandleDeleteIndex(index string) <-chan bool {
 	responseChan := make(chan bool)
 	go func() {
 		defer close(responseChan)
-		if e.indexExits(index) {
+		if e.indexExist(index) {
 			indexDelete := elastic.NewDeleteIndexService(e.Client)
 			result, err := indexDelete.Index(index).Do()
 			if result.Acknowledged {
-				log.Printf("Index %s deleted with sucess", index)
+				log.Printf("index %s deleted with sucess", index)
 			} else {
-				log.Fatalf("Index %s delete failed", index)
+				log.Fatalf("index %s delete failed", index)
 			}
 
 			if err != nil {
-				log.Fatalf("Index %s delete failed with error: %s", index, err)
+				log.Fatalf("index %s delete failed with error: %s", index, err)
 			}
 			responseChan <- result.Acknowledged
 		} else {
-			log.Printf("Index %s does not exist skipping...", index)
+			log.Printf("index %s does not exist skipping...", index)
 			responseChan <- true
 		}
 	}()
 	return responseChan
 }
 
-func (e *ElasticSearchClient) HandleBulk(index string, indexType string, data... interface{}) <-chan *elastic.BulkResponse {
+func (e *ElasticSearchClient) HandleBulk(index string, indexType string, data ... interface{}) <-chan *elastic.BulkResponse {
 	bulkResponseChan := make(chan *elastic.BulkResponse)
 	bulkClient := e.Client.Bulk()
-	if !e.indexExits(index) {
-		log.Fatal("Index does not exist")
+	if !e.indexExist(index) {
+		log.Fatal("index does not exist")
 	}
 	var deleteDoc *elastic.BulkDeleteRequest
 	var updateDoc *elastic.BulkUpdateRequest
@@ -184,24 +178,24 @@ func (e *ElasticSearchClient) HandleBulk(index string, indexType string, data...
 				bulkClient.Add(deleteDoc)
 			case *DocIndexUpdate:
 				if data[i].(*DocIndexUpdate).Action == "" {
-					log.Fatal("Action property is mandatory in given structure.")
+					log.Fatal("action property is mandatory in given structure.")
 				}
 				if data[i].(*DocIndexUpdate).Action == "update" {
 					log.Print(data[i].(*DocIndexUpdate).Document)
-					if  data[i].(*DocIndexUpdate).Id == "" {
-						log.Fatal("Id property is mandatory when updating document.")
+					if data[i].(*DocIndexUpdate).Id == "" {
+						log.Fatal("id property is mandatory when updating document.")
 					}
 					updateDoc = elastic.NewBulkUpdateRequest().Index(index).Type(indexType).Id(data[i].(*DocIndexUpdate).Id).Doc(data[i].(*DocIndexUpdate).Document)
 					bulkClient.Add(updateDoc)
 				} else {
 					indexDoc = elastic.NewBulkIndexRequest().Index(index).Type(indexType).Doc(data[i].(*DocIndexUpdate).Document)
-					if  data[i].(*DocIndexUpdate).Id != "" {
+					if data[i].(*DocIndexUpdate).Id != "" {
 						indexDoc.Id(data[i].(*DocIndexUpdate).Id)
 					}
 					bulkClient.Add(indexDoc)
 				}
 			default:
-				log.Fatalf("Given structure %v is not supported", data[i])
+				log.Fatalf("given structure %v is not supported", data[i])
 			}
 
 		}
@@ -214,7 +208,7 @@ func (e *ElasticSearchClient) HandleBulk(index string, indexType string, data...
 			log.Fatalf("expected bulkResponse to be != nil; got nil")
 		}
 		if bulkResponse.Errors {
-			log.Fatalf("Bulk response error %v", bulkResponse.Errors)
+			log.Fatalf("bulk response error %v", bulkResponse.Errors)
 		}
 		bulkResponseChan <- bulkResponse
 
@@ -222,7 +216,7 @@ func (e *ElasticSearchClient) HandleBulk(index string, indexType string, data...
 	return bulkResponseChan
 }
 
-func (e *ElasticSearchClient) indexExits(index string) bool{
+func (e *ElasticSearchClient) indexExist(index string) bool {
 	exists, err := e.Client.IndexExists(index).Do()
 
 	if err != nil {

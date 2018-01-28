@@ -43,7 +43,7 @@ func main() {
 	for {
 		m, more := <-success
 		if more {
-			fmt.Println("Document: ", m)
+			fmt.Println("Bulk response : ", m)
 		} else {
 			fmt.Println("No more document, shutting worker elastic...")
 			return

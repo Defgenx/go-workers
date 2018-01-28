@@ -42,19 +42,19 @@ func NewRabbitMQ(amqpURI, exchange, exchangeType, queueName, key, ctag string) (
 
 	var err error
 
-	log.Printf("Dialing %q", amqpURI)
+	log.Printf("dialing %q", amqpURI)
 	c.conn, err = amqp.Dial(amqpURI)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Dial: %s", err)
+		return nil, nil, fmt.Errorf("dial: %s", err)
 	}
 
-	log.Printf("Got Connection, getting Channel")
+	log.Printf("got Connection, getting Channel")
 	c.channel, err = c.conn.Channel()
 	if err != nil {
-		return nil, nil, fmt.Errorf("Channel: %s", err)
+		return nil, nil, fmt.Errorf("channel: %s", err)
 	}
 
-	log.Printf("Got Channel, declaring Exchange (%q)", exchange)
+	log.Printf("got Channel, declaring Exchange (%q)", exchange)
 	if err = c.channel.ExchangeDeclare(
 		exchange,     // name of the exchange
 		exchangeType, // type
@@ -64,10 +64,10 @@ func NewRabbitMQ(amqpURI, exchange, exchangeType, queueName, key, ctag string) (
 		false,        // noWait
 		nil,          // arguments
 	); err != nil {
-		return nil, nil, fmt.Errorf("Exchange Declare: %s", err)
+		return nil, nil, fmt.Errorf("exchange Declare: %s", err)
 	}
 
-	log.Printf("Declared Exchange, declaring Queue %q", queueName)
+	log.Printf("declared Exchange, declaring Queue %q", queueName)
 	queue, err := c.channel.QueueDeclare(
 		queueName, // name of the queue
 		true,      // durable
@@ -77,10 +77,10 @@ func NewRabbitMQ(amqpURI, exchange, exchangeType, queueName, key, ctag string) (
 		nil,       // arguments
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Queue Declare: %s", err)
+		return nil, nil, fmt.Errorf("queue Declare: %s", err)
 	}
 
-	log.Printf("Declared Queue (%q %d messages, %d consumers), binding to Exchange (key %q)",
+	log.Printf("declared Queue (%q %d messages, %d consumers), binding to Exchange (key %q)",
 		queue.Name, queue.Messages, queue.Consumers, key)
 
 	if err = c.channel.QueueBind(
@@ -90,10 +90,10 @@ func NewRabbitMQ(amqpURI, exchange, exchangeType, queueName, key, ctag string) (
 		false,      // noWait
 		nil,        // arguments
 	); err != nil {
-		return nil, nil, fmt.Errorf("Queue Bind: %s", err)
+		return nil, nil, fmt.Errorf("queue Bind: %s", err)
 	}
 
-	log.Printf("Queue bound to Exchange, starting Consume (consumer tag %q)", c.tag)
+	log.Printf("queue bound to Exchange, starting Consume (consumer tag %q)", c.tag)
 	deliveries, err := c.channel.Consume(
 		queue.Name, // name
 		c.tag,      // consumerTag,
@@ -104,7 +104,7 @@ func NewRabbitMQ(amqpURI, exchange, exchangeType, queueName, key, ctag string) (
 		nil,        // arguments
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Queue Consume: %s", err)
+		return nil, nil, fmt.Errorf("queue Consume: %s", err)
 	}
 
 	return c, deliveries, nil
@@ -113,7 +113,7 @@ func NewRabbitMQ(amqpURI, exchange, exchangeType, queueName, key, ctag string) (
 func (c *RabbitMQ) Shutdown() error {
 	// will close() the deliveries channel
 	if err := c.channel.Cancel(c.tag, true); err != nil {
-		return fmt.Errorf("Consumer cancel failed: %s", err)
+		return fmt.Errorf("consumer cancel failed: %s", err)
 	}
 
 	if err := c.conn.Close(); err != nil {
@@ -137,16 +137,16 @@ func (c *RabbitMQ) Handle(deliveries <-chan amqp.Delivery, done chan error) <-ch
 			d.Ack(false)
 		}
 
-		log.Println("Handle: messages channel closed")
+		log.Println("handle: messages channel closed")
 		done <- nil
 	}()
 
 	go func() {
 		if lifetime > 0 {
-			log.Printf("Running for %s", lifetime)
+			log.Printf("running for %s", lifetime)
 			time.Sleep(lifetime)
 			if err := c.Shutdown(); err != nil {
-				log.Fatalf("Error during shutdown: %s", err)
+				log.Fatalf("error during shutdown: %s", err)
 			}
 			close(out)
 		}

@@ -19,9 +19,13 @@ func main() {
 		}
 		if !m.NextResultSet() {
 			fmt.Println("No more results, next query...")
+			break
 		}
+
+	}
 		db, msgs, _ := mysql.Execute("SELECT ID, DESCRIPTION, LOGIN FROM TEST WHERE ID = ?", 372)
 
+	for {
 		ms, _ := <-msgs
 		for ms.Next() {
 			var id int
@@ -31,9 +35,10 @@ func main() {
 		}
 		if !ms.NextResultSet() {
 			fmt.Println("No more results, next query...")
+			break;
 		}
-		db.Shutdown()
-		fmt.Println("No more message, shutting worker mysql...")
-		return
 	}
+	db.Shutdown()
+	fmt.Println("No more message, shutting worker mysql...")
+	return
 }

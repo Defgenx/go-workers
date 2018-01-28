@@ -44,7 +44,7 @@ func NewMysql(host string, login string, password string, database string, port 
 	db.conn, err = sql.Open("mysql", dsn)
 
 	if err != nil {
-		return nil, fmt.Errorf("Dial: %s", err.Error())
+		return nil, fmt.Errorf("dial: %s", err.Error())
 	}
 
 	return db, err
@@ -52,10 +52,10 @@ func NewMysql(host string, login string, password string, database string, port 
 
 func (c *Mysql) Shutdown() error {
 	if err := c.conn.Close(); err != nil {
-		return fmt.Errorf("MySQL connection close error: %s", err)
+		return fmt.Errorf("mySQL connection close error: %s", err)
 	}
 
-	defer log.Printf("MySQL shutdown OK")
+	defer log.Printf("mySQL shutdown OK")
 	return nil
 }
 
@@ -63,11 +63,11 @@ func (c *Mysql) Refresh() (*Mysql, error) {
 	var err error
 	if c == nil || c.conn.Ping() != nil {
 		if c, err = NewMysql(host, login, password, database, port, protocol); err != nil {
-			return nil, fmt.Errorf("MySQL connection refresh error: %s", err)
+			return nil, fmt.Errorf("mySQL connection refresh error: %s", err)
 		}
-		defer log.Printf("MySQL refresh OK")
+		defer log.Printf("mySQL refresh OK")
 	} else {
-		log.Print("Connection already opened")
+		log.Print("connection already opened")
 	}
 	return c, nil
 }
@@ -76,9 +76,9 @@ func (c *Mysql) Handle(query string) <-chan *sql.Rows {
 	out := make(chan *sql.Rows)
 	go func() {
 		rows, err := c.conn.Query(query)
-		log.Println("Handle: query finished")
+		log.Println("handle: query finished")
 		if err != nil {
-			log.Fatalf("Query Error: %s", err.Error())
+			log.Fatalf("query Error: %s", err.Error())
 		}
 		out <- rows
 
@@ -91,17 +91,17 @@ func (c *Mysql) HandleWithParameters(query string, values ... interface{}) <-cha
 	// Prepare statement for reading data
 	stmtOut, err := c.conn.Prepare(query)
 	if err != nil {
-		log.Fatalf("Prepare Query Error: %s", err.Error())
+		log.Fatalf("prepare Query Error: %s", err.Error())
 	}
-	log.Println("Handle: prepared query finished")
+	log.Println("handle: prepared query finished")
 
 	out := make(chan *sql.Rows)
 	go func() {
 		rows, err := stmtOut.Query(values...)
 		if err != nil {
-			log.Fatalf("Query Error: %s", err.Error())
+			log.Fatalf("query Error: %s", err.Error())
 		}
-		log.Println("Handle: query finished")
+		log.Println("handle: query finished")
 		out <- rows
 	}()
 
