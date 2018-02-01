@@ -1,4 +1,4 @@
-package consumers
+package rabbitmq
 
 import (
 	"fmt"
@@ -32,7 +32,7 @@ type RabbitMQ struct {
 	done    chan error
 }
 
-func NewRabbitMQ(amqpURI, exchange, exchangeType, queueName, key, ctag string) (*RabbitMQ, <-chan amqp.Delivery, error) {
+func NewConsumer(amqpURI, exchange, exchangeType, queueName, key, ctag string) (*RabbitMQ, <-chan amqp.Delivery, error) {
 	c := &RabbitMQ{
 		conn:    nil,
 		channel: nil,

@@ -1,0 +1,15 @@
+drivers:
+  elasticsearchv1:
+    bender:
+      domains:
+        - digi-es02.silo:9200
+        - digi-es01.silo:9200
+
+  mysql:
+    maria-silo:
+      host: maria.silo
+      login: digiadmin
+      password: dgt4ever
+      database: DIGITICK_V3_20180131
+      port: 3306
+      protocol: tcp
