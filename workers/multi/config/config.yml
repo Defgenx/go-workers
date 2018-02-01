@@ -1,15 +1,33 @@
 drivers:
   elasticsearchv1:
-    bender:
+    local:
       domains:
-        - digi-es02.silo:9200
-        - digi-es01.silo:9200
+        - http://localhost:9200
 
   mysql:
-    maria-silo:
-      host: maria.silo
-      login: digiadmin
-      password: dgt4ever
-      database: DIGITICK_V3_20180131
+    maria:
+      host: localhost
+      login: guest
+      password: guest
+      database: test
       port: 3306
       protocol: tcp
+
+  rabbitmq-consumer:
+    local:
+      uri: amqp://guest:guest@localhost:5672/
+      exchange: default-exchange
+      exchangeType: direct
+      queue: default-queue
+      bindingKey: default-key
+      consumerTag: simple-consumer
+
+  rabbitmq-producer:
+    local:
+      uri: amqp://guest:guest@localhost:5672/
+      exchange: default-exchange
+      exchangeType: direct
+      routingKey: default-key
+      producerTag: simple-consumer
+      reliable: true
+

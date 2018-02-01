@@ -23,7 +23,7 @@ func main() {
 		}
 
 	}
-		db, msgs, _ := mysql.Execute("SELECT ID, DESCRIPTION, LOGIN FROM TEST WHERE ID = ?", 372)
+	db, msgs, _ := mysql.Execute("SELECT ID, DESCRIPTION, LOGIN FROM TEST WHERE ID = ?", 372)
 
 	for {
 		ms, _ := <-msgs

@@ -1,57 +1,67 @@
-package main
+package rabbitmq
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"github.com/streadway/amqp"
-	"strconv"
 )
 
-var (
-	uri          = flag.String("uri", "amqp://guest:guest@localhost:5672/", "AMQP URI")
-	exchangeName = flag.String("exchange", "default-exchange", "Durable AMQP exchange name")
-	exchangeType = flag.String("exchange-type", "direct", "Exchange type - direct|fanout|topic|x-custom")
-	routingKey   = flag.String("key", "default-key", "AMQP routing key")
-	body         = flag.String("body", "foobar", "Body of message")
-	reliable     = flag.Bool("reliable", true, "Wait for the publisher confirmation before exiting")
-)
-
-func init() {
-	flag.Parse()
-}
-
-func main() {
-	for i := 0; i < 10; i++ {
-		message := *body + strconv.Itoa(i)
-		if err := publish(*uri, *exchangeName, *exchangeType, *routingKey, message, *reliable); err != nil {
-			log.Fatalf("%s", err)
-		}
-		log.Printf("%d published %dB OK", i, len(*body))
+// Helper => only for testing purpose | must be deleted
+func Produce(body string) (*Producer, error) {
+	var (
+		uri          = "amqp://guest:guest@localhost:5672/"
+		exchange     = "default-exchange"
+		exchangeType = "direct"
+		routingKey   = "default-key"
+		producerKey  = "simple-producer"
+		reliable     = true
+	)
+	producer, err := NewProducer(uri, exchange, exchangeType, routingKey, reliable, producerKey)
+	if err != nil {
+		fmt.Errorf("Error: %s", err)
 	}
+
+	if err := producer.Publish(body); err != nil {
+		log.Fatalf("%s", err)
+	}
+	log.Printf("published %dB OK", len(body))
+
+	return producer, nil
 }
 
-func publish(amqpURI, exchange, exchangeType, routingKey, body string, reliable bool) error {
+type Producer struct {
+	conn        *amqp.Connection
+	channel     *amqp.Channel
+	exchange    string
+	routingKey  string
+	reliable    bool
+	producerTag string
+}
 
-	// This function dials, connects, declares, publishes, and tears down,
-	// all in one go. In a real service, you probably want to maintain a
-	// long-lived connection as state, and publish against that.
+func NewProducer(amqpURI, exchange, exchangeType, routingKey string, reliable bool, producerTag string) (*Producer, error) {
+	p := &Producer{
+		conn:        nil,
+		channel:     nil,
+		exchange:    exchange,
+		routingKey:  routingKey,
+		reliable:    reliable,
+		producerTag: producerTag}
+	var err error
 
 	log.Printf("dialing %q", amqpURI)
-	connection, err := amqp.Dial(amqpURI)
+	p.conn, err = amqp.Dial(amqpURI)
 	if err != nil {
-		return fmt.Errorf("Dial: %s", err)
+		return nil, fmt.Errorf("dial: %s", err)
 	}
-	defer connection.Close()
 
 	log.Printf("got Connection, getting Channel")
-	channel, err := connection.Channel()
+	p.channel, err = p.conn.Channel()
 	if err != nil {
-		return fmt.Errorf("Channel: %s", err)
+		return nil, fmt.Errorf("channel: %s", err)
 	}
 
 	log.Printf("got Channel, declaring %q Exchange (%q)", exchangeType, exchange)
-	if err := channel.ExchangeDeclare(
+	if err := p.channel.ExchangeDeclare(
 		exchange,     // name
 		exchangeType, // type
 		true,         // durable
@@ -60,28 +70,31 @@ func publish(amqpURI, exchange, exchangeType, routingKey, body string, reliable 
 		false,        // noWait
 		nil,          // arguments
 	); err != nil {
-		return fmt.Errorf("Exchange Declare: %s", err)
+		return nil, fmt.Errorf("exchange Declare: %s", err)
 	}
 
-	// Reliable publisher confirms require confirm.select support from the
-	// connection.
-	if reliable {
+	return p, nil
+}
+
+func (p *Producer) Publish(body string) error {
+	// Reliable publisher confirms require confirm.select support from the connection.
+	if p.reliable {
 		log.Printf("enabling publishing confirms.")
-		if err := channel.Confirm(false); err != nil {
-			return fmt.Errorf("Channel could not be put into confirm mode: %s", err)
+		if err := p.channel.Confirm(false); err != nil {
+			return fmt.Errorf("channel could not be put into confirm mode: %s", err)
 		}
 
-		confirms := channel.NotifyPublish(make(chan amqp.Confirmation, 1))
+		confirms := p.channel.NotifyPublish(make(chan amqp.Confirmation, 1))
 
-		defer confirmOne(confirms)
+		defer p.confirmOne(confirms)
 	}
 
 	log.Printf("declared Exchange, publishing %dB body (%q)", len(body), body)
-	if err = channel.Publish(
-		exchange,   // publish to an exchange
-		routingKey, // routing to 0 or more queues
-		false,      // mandatory
-		false,      // immediate
+	if err := p.channel.Publish(
+		p.exchange,   // publish to an exchange
+		p.routingKey, // routing to 0 or more queues
+		false,        // mandatory
+		false,        // immediate
 		amqp.Publishing{
 			Headers:         amqp.Table{},
 			ContentType:     "text/plain",
@@ -98,10 +111,8 @@ func publish(amqpURI, exchange, exchangeType, routingKey, body string, reliable 
 	return nil
 }
 
-// One would typically keep a channel of publishings, a sequence number, and a
-// set of unacknowledged sequence numbers and loop until the publishing channel
-// is closed.
-func confirmOne(confirms <-chan amqp.Confirmation) {
+// ACK message on success
+func (p *Producer) confirmOne(confirms <-chan amqp.Confirmation) {
 	log.Printf("waiting for confirmation of one publishing")
 
 	if confirmed := <-confirms; confirmed.Ack {
@@ -109,4 +120,19 @@ func confirmOne(confirms <-chan amqp.Confirmation) {
 	} else {
 		log.Printf("failed delivery of delivery tag: %d", confirmed.DeliveryTag)
 	}
+}
+
+func (p *Producer) Shutdown() error {
+	// will close() the deliveries channel
+	if err := p.channel.Cancel(p.producerTag, true); err != nil {
+		return fmt.Errorf("producer cancel failed: %s", err)
+	}
+
+	if err := p.conn.Close(); err != nil {
+		return fmt.Errorf("AMQP connection close error: %s", err)
+	}
+
+	defer log.Printf("AMQP shutdown OK")
+
+	return nil
 }

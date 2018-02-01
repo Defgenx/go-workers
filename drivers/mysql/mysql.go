@@ -7,19 +7,22 @@ import (
 	"log"
 )
 
-var (
-	host     = "localhost"
-	login    = "guest"
-	password = "guest"
-	database = "test-db"
-	port     = 3306
-	protocol = "tcp"
-	db       *Mysql
-)
-
+// Helper => only for testing purpose | must be deleted
 func Execute(query string, parameters ... interface{}) (*Mysql, <-chan *sql.Rows, error) {
+	var (
+		host     = "localhost"
+		login    = "guest"
+		password = "guest"
+		database = "test-db"
+		port     = 3306
+		protocol = "tcp"
+		db       *Mysql
+	)
 	var err error
-	db, err = db.Refresh()
+	db, err = NewMysql(host, login, password, database, port, protocol)
+	if err != nil {
+		return nil, nil, fmt.Errorf("dial: %s", err.Error())
+	}
 	var result <-chan *sql.Rows
 	if len(parameters) == 0 {
 		result = db.Handle(query)
@@ -30,15 +33,26 @@ func Execute(query string, parameters ... interface{}) (*Mysql, <-chan *sql.Rows
 }
 
 type Mysql struct {
-	conn *sql.DB
-	done chan error
+	conn     *sql.DB
+	host     string
+	login    string
+	password string
+	database string
+	port     int
+	protocol string
 }
 
 func NewMysql(host string, login string, password string, database string, port int, protocol string) (*Mysql, error) {
 	var err error
-	db = &Mysql{
-		conn: nil,
-	}
+	db := &Mysql{
+		conn:     nil,
+		host:     host,
+		login:    login,
+		password: password,
+		database: database,
+		port:     port,
+		protocol: protocol}
+
 	netAddr := fmt.Sprintf("%s(%s:%d)", protocol, host, port)
 	dsn := fmt.Sprintf("%s:%s@%s/%s", login, password, netAddr, database)
 	db.conn, err = sql.Open("mysql", dsn)
@@ -62,7 +76,7 @@ func (c *Mysql) Shutdown() error {
 func (c *Mysql) Refresh() (*Mysql, error) {
 	var err error
 	if c == nil || c.conn.Ping() != nil {
-		if c, err = NewMysql(host, login, password, database, port, protocol); err != nil {
+		if c, err = NewMysql(c.host, c.login, c.password, c.database, c.port, c.protocol); err != nil {
 			return nil, fmt.Errorf("mySQL connection refresh error: %s", err)
 		}
 		defer log.Printf("mySQL refresh OK")

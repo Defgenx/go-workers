@@ -8,37 +8,37 @@ import (
 )
 
 var (
-	uri          = "amqp://guest:guest@localhost:5672/"
-	exchange     = "default-exchange"
-	exchangeType = "direct"
-	queue        = "default-queue"
-	bindingKey   = "default-key"
-	consumerTag  = "simple-consumer"
-	lifetime     = 15 * time.Second
+	lifetime = 15 * time.Second
 )
 
-func Consume(timer *time.Duration) (*RabbitMQ, <-chan string, error) {
-	lifetime = *timer
-	c, deliveries, err := NewRabbitMQ(uri, exchange, exchangeType, queue, bindingKey, consumerTag)
+// Helper => only for testing purpose | must be deleted
+func Consume(timer *time.Duration) (*Consumer, <-chan string, error) {
+	var (
+		uri          = "amqp://guest:guest@localhost:5672/"
+		exchange     = "default-exchange"
+		exchangeType = "direct"
+		queue        = "default-queue"
+		bindingKey   = "default-key"
+		consumerTag  = "simple-consumer"
+	)
+	c, deliveries, err := NewConsumer(uri, exchange, exchangeType, queue, bindingKey, consumerTag, timer)
 
-	output := c.Handle(deliveries, c.done)
+	output := c.Handle(deliveries)
 	return c, output, err
 }
 
-type RabbitMQ struct {
+type Consumer struct {
 	conn    *amqp.Connection
 	channel *amqp.Channel
 	tag     string
-	done    chan error
 }
 
-func NewConsumer(amqpURI, exchange, exchangeType, queueName, key, ctag string) (*RabbitMQ, <-chan amqp.Delivery, error) {
-	c := &RabbitMQ{
+func NewConsumer(amqpURI, exchange, exchangeType, queueName, key, ctag string, timer *time.Duration) (*Consumer, <-chan amqp.Delivery, error) {
+	lifetime = *timer
+	c := &Consumer{
 		conn:    nil,
 		channel: nil,
-		tag:     ctag,
-		done:    make(chan error),
-	}
+		tag:     ctag}
 
 	var err error
 
@@ -110,7 +110,7 @@ func NewConsumer(amqpURI, exchange, exchangeType, queueName, key, ctag string) (
 	return c, deliveries, nil
 }
 
-func (c *RabbitMQ) Shutdown() error {
+func (c *Consumer) Shutdown() error {
 	// will close() the deliveries channel
 	if err := c.channel.Cancel(c.tag, true); err != nil {
 		return fmt.Errorf("consumer cancel failed: %s", err)
@@ -122,11 +122,10 @@ func (c *RabbitMQ) Shutdown() error {
 
 	defer log.Printf("AMQP shutdown OK")
 
-	// wait for handle() to exit
-	return <-c.done
+	return nil
 }
 
-func (c *RabbitMQ) Handle(deliveries <-chan amqp.Delivery, done chan error) <-chan string {
+func (c *Consumer) Handle(deliveries <-chan amqp.Delivery) <-chan string {
 	out := make(chan string)
 	go func() {
 		for d := range deliveries {
@@ -136,19 +135,17 @@ func (c *RabbitMQ) Handle(deliveries <-chan amqp.Delivery, done chan error) <-ch
 			)
 			d.Ack(false)
 		}
-
 		log.Println("handle: messages channel closed")
-		done <- nil
 	}()
 
 	go func() {
+		defer close(out)
 		if lifetime > 0 {
 			log.Printf("running for %s", lifetime)
 			time.Sleep(lifetime)
 			if err := c.Shutdown(); err != nil {
 				log.Fatalf("error during shutdown: %s", err)
 			}
-			close(out)
 		}
 	}()
 	return out

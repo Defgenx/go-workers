@@ -12,11 +12,10 @@ var (
 )
 
 type EsShow struct {
-	Id string
-	EventId int
+	Id        string
+	EventId   int
 	EventName string
 	EventDesc string
-
 }
 
 func main() {
@@ -24,21 +23,21 @@ func main() {
 	esDriver := elasticsearch.NewElasticSearchClient(ES_HOST)
 	response := esDriver.HandleCreateIndex("test", "")
 
-	for{
+	for {
 		isCreated, m := <-response
 		if !m {
 			break
 		}
 		log.Print("Waiting index creation...")
-		time.Sleep(1*time.Second)
+		time.Sleep(1 * time.Second)
 		log.Printf("Index created ? %v", isCreated)
 	}
 
-	data1 := elasticsearch.DocIndexUpdate{Action:"index", Document:EsShow{"123-123-123", 0, "test-alex", "test-alex"}}
-	data2 := elasticsearch.DocIndexUpdate{Action:"index", Id:"1", Document:EsShow{"123-123-123", 0, "test-alex", "test-alex"}}
-	data3 := elasticsearch.DocIndexUpdate{Action:"index", Id:"2", Document:EsShow{"123-123-123", 0, "test-alex", "test-alex"}}
-	data4 := elasticsearch.DocIndexUpdate{Action:"update", Id:"2", Document:EsShow{"122-123-123", 0, "test-alex2", "test-alex2"}}
-	data5 := elasticsearch.DocDelete{Id:"1"}
+	data1 := elasticsearch.DocIndexUpdate{Action: "index", Document: EsShow{"123-123-123", 0, "test-alex", "test-alex"}}
+	data2 := elasticsearch.DocIndexUpdate{Action: "index", Id: "1", Document: EsShow{"123-123-123", 0, "test-alex", "test-alex"}}
+	data3 := elasticsearch.DocIndexUpdate{Action: "index", Id: "2", Document: EsShow{"123-123-123", 0, "test-alex", "test-alex"}}
+	data4 := elasticsearch.DocIndexUpdate{Action: "update", Id: "2", Document: EsShow{"122-123-123", 0, "test-alex2", "test-alex2"}}
+	data5 := elasticsearch.DocDelete{Id: "1"}
 	success := esDriver.HandleBulk("test", "show", &data1, &data2, &data3, &data4, &data5)
 	for {
 		m, more := <-success

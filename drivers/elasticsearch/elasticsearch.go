@@ -2,7 +2,6 @@ package elasticsearch
 
 import (
 	"gopkg.in/olivere/elastic.v1"
-	"sync"
 	"net/http"
 	"log"
 	"encoding/json"
@@ -18,24 +17,22 @@ type DocDelete struct {
 	Id string
 }
 
-var synchro sync.Once
-var elasticLib *ElasticSearchClient
-
 type ElasticSearchClient struct {
-	Client *elastic.Client
+	Client  *elastic.Client
+	domains []string
 }
 
 func NewElasticSearchClient(domains ... string) *ElasticSearchClient {
-	synchro.Do(func() {
-		client, err := elastic.NewClient(
-			http.DefaultClient,
-			domains...)
-		if err != nil {
-			log.Fatalf("Elasticsearch client error: %s", err)
-		}
-		elasticLib = &ElasticSearchClient{
-			Client: client}
-	})
+	client, err := elastic.NewClient(
+		http.DefaultClient,
+		domains...)
+	if err != nil {
+		log.Fatalf("Elasticsearch client error: %s", err)
+	}
+	elasticLib := &ElasticSearchClient{
+		Client:  client,
+		domains: domains}
+
 	for i := 0; i < len(domains); i++ {
 		ping, _, err := elasticLib.Client.Ping().URL(domains[i]).Do()
 		if err != nil {

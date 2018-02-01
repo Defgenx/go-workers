@@ -1,10 +1,12 @@
-package rabbitmq
+package main
 
 import (
 	"fmt"
-	"github.com/go-workers/drivers/rabbitmq/consumers"
+	"github.com/go-workers/drivers/rabbitmq"
 	"flag"
 	"time"
+	"sync"
+	"log"
 )
 
 var (
@@ -17,16 +19,38 @@ func Init() {
 
 func main() {
 	Init()
-	fmt.Println("Starting test worker rabbitmq...")
-	_, msg, _ := consumers.Consume(timer)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		fmt.Println("Starting test worker rabbitmq producer...")
+		message := "test"
+		producer, err := rabbitmq.Produce(message)
 
-	for {
-		m, more := <-msg
-		if more {
-			fmt.Println("Message: ", m)
+		if err != nil {
+			log.Fatalf("error occured publishing : %s", err)
 		} else {
-			fmt.Println("No more message, shutting worker rabbitmq...")
-			return
+			log.Print("Message %s published", message)
+			producer.Shutdown()
 		}
-	}
+
+	}()
+
+	go func() {
+		defer wg.Done()
+		fmt.Println("Starting test worker rabbitmq consumer...")
+		_, msg, _ := rabbitmq.Consume(timer)
+
+		for {
+			m, more := <-msg
+			if more {
+				fmt.Println("Message: ", m)
+			} else {
+				fmt.Println("No more message, shutting worker rabbitmq...")
+				break
+			}
+		}
+	}()
+	wg.Wait()
+	log.Print("Produce / Consume finished...")
 }
