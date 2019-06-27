@@ -1,2 +1,2 @@
 # go-workers
-Deamon system written in Go
+Workers written in Go
